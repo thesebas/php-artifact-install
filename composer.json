@@ -1,0 +1,24 @@
+{
+    "name": "thesebas/artifact-install",
+    "description": "install packages from artifacts",
+    "type": "composer-plugin",
+    "keywords": ["composer-plugin", "artifacts"],
+    "autoload": {
+        "psr-4": {
+            "Thesebas\\ArtifactInstall\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "thesebas",
+            "email": "thesebas@thesebas.net"
+        }
+    ],
+    "require": {
+        "composer-plugin-api": "^2.0",
+        "php": ">=8.0"
+    },
+    "require-dev": {
+        "composer/composer": "~2.0"
+    }
+}
