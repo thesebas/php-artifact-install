@@ -4,29 +4,20 @@ namespace Thesebas\ArtifactInstall;
 
 use Composer\Composer;
 use Composer\EventDispatcher\EventSubscriberInterface;
-use Composer\Installer\PackageEvent;
-use Composer\Installer\PackageEvents;
 use Composer\IO\IOInterface;
 use Composer\Package\PackageInterface;
 use Composer\Plugin\PluginEvents;
 use Composer\Plugin\PluginInterface;
 use Composer\Plugin\PreFileDownloadEvent;
-
+use function array_key_exists;
+use function explode;
 
 /**
  * Composer artifacts plugin.
  *
- * @SuppressWarnings(PHPMD.ShortVariable)
  */
 class Plugin implements PluginInterface, EventSubscriberInterface
 {
-    /**
-     * Artifacts configuration.
-     *
-     * @var string[]
-     */
-    private $config;
-
     /**
      * The composer input/output.
      *
@@ -35,22 +26,12 @@ class Plugin implements PluginInterface, EventSubscriberInterface
     private IOInterface $io;
 
     /**
-     * Get the configuration.
-     *
-     * @return array
-     */
-    public function getConfig(): array
-    {
-        return $this->config;
-    }
-
-    /**
      * {@inheritdoc}
      */
     public function activate(Composer $composer, IOInterface $io): void
     {
         $this->io = $io;
-        $this->io->info('Activating plugin');
+        $this->io->debug('Activating plugin');
     }
 
     /**
@@ -66,22 +47,29 @@ class Plugin implements PluginInterface, EventSubscriberInterface
     /**
      * Custom event handler to change configuration for artifacts.
      *
-     * @param \Composer\Plugin\PreFileDownloadEvent $event
+     * @param PreFileDownloadEvent $event
      *   The event.
      */
     public function patchDownloadSource(PreFileDownloadEvent $event): void
     {
         $package = $event->getContext();
-        if ($package instanceof PackageInterface && \array_key_exists('artifacts', $package->getExtra())) {
+        if (!($package instanceof PackageInterface)) {
+            return;
+        }
+
+        if (array_key_exists('artifacts', $package->getExtra())) {
+            $this->io->debug("processing {$package->getPrettyName()}");
             $event->setProcessedUrl($this->getPackageDistUrl($package));
             $package->setDistType($this->getPackageDistType($package));
+        } else {
+            $this->io->debug("missing extra.artifacts in {$package->getPrettyName()}, skip");
         }
     }
 
     /**
      * Custom callback that returns tokens from the package.
      *
-     * @param \Composer\Package\PackageInterface $package
+     * @param PackageInterface $package
      *   The package.
      *
      * @return string[]
@@ -89,7 +77,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
      */
     static function getPluginTokens(PackageInterface $package): array
     {
-        [$vendorName, $projectName] = \explode(
+        [$vendorName, $projectName] = explode(
             '/',
             $package->getPrettyName(),
             2
@@ -109,25 +97,25 @@ class Plugin implements PluginInterface, EventSubscriberInterface
     }
 
     /**
-     * @param \Composer\Package\PackageInterface $package
+     * @param PackageInterface $package
      *
      * @return string
      */
     private function getPackageDistUrl(PackageInterface $package): string
     {
         $tokens = self::getPluginTokens($package);
-        return strtr($package->getExtra()['url'], $tokens);
+        return strtr($package->getExtra()['artifacts']['url'], $tokens);
     }
 
     /**
-     * @param \Composer\Package\PackageInterface $package
+     * @param PackageInterface $package
      *
      * @return string
      */
     private function getPackageDistType(PackageInterface $package): string
     {
         $tokens = self::getPluginTokens($package);
-        return strtr($package->getExtra()['type'] ?? 'zip', $tokens);
+        return strtr($package->getExtra()['artifacts']['type'] ?? 'zip', $tokens);
     }
 
     /**
@@ -135,7 +123,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
      */
     public function deactivate(Composer $composer, IOInterface $io): void
     {
-        $this->io->info('Deactivating plugin');
+        $this->io->debug('Deactivating plugin');
     }
 
     /**
@@ -143,6 +131,6 @@ class Plugin implements PluginInterface, EventSubscriberInterface
      */
     public function uninstall(Composer $composer, IOInterface $io): void
     {
-        $this->io->info('Uninstalling plugin');
+        $this->io->debug('Uninstalling plugin');
     }
 }
