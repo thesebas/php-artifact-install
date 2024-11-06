@@ -4,11 +4,13 @@ namespace Thesebas\ArtifactInstall;
 
 use Composer\Composer;
 use Composer\EventDispatcher\EventSubscriberInterface;
+use Composer\Factory;
 use Composer\IO\IOInterface;
 use Composer\Package\PackageInterface;
 use Composer\Plugin\PluginEvents;
 use Composer\Plugin\PluginInterface;
 use Composer\Plugin\PreFileDownloadEvent;
+use Composer\Util\GitHub;
 use function array_key_exists;
 use function explode;
 
@@ -25,6 +27,13 @@ class Plugin implements PluginInterface, EventSubscriberInterface
      */
     private IOInterface $io;
 
+
+    /**
+     * The composer instance.
+     * @var Composer
+     */
+    private Composer $composer;
+
     /**
      * {@inheritdoc}
      */
@@ -32,6 +41,7 @@ class Plugin implements PluginInterface, EventSubscriberInterface
     {
         $this->io = $io;
         $this->io->debug('Activating plugin');
+        $this->composer = $composer;
     }
 
     /**
@@ -103,8 +113,31 @@ class Plugin implements PluginInterface, EventSubscriberInterface
      */
     private function getPackageDistUrl(PackageInterface $package): string
     {
+        $config = $package->getExtra()['artifacts'];
         $tokens = self::getPluginTokens($package);
-        return strtr($package->getExtra()['artifacts']['url'], $tokens);
+        $config = array_map(function ($val) use ($tokens) {
+            return strtr($val, $tokens);
+        }, $config);
+        if (array_key_exists('source', $config)) {
+            switch ($config['source']) {
+                case 'github-release-asset':
+                    $package->setTransportOptions(['http' => ['header' => ['Accept: application/octet-stream']]]);
+                    $httpDownloader = Factory::createHttpDownloader($this->io, $this->composer->getConfig());
+                    $res = $httpDownloader->get("https://api.github.com/repos/{$config['repo']}/releases/tags/{$config['tag']}");
+                    $resBody = $res->decodeJson();
+                    foreach ($resBody['assets'] as $asset) {
+                        if ($asset['name'] === $config['file']) {
+                            return $asset['url'];
+                        }
+                    }
+                    throw new \RuntimeException('Missing matching asset');
+                default:
+                    throw new \UnexpectedValueException('Unsupported source type');
+            }
+        } else {
+
+            return $config['url'];
+        }
     }
 
     /**
